@@ -1,0 +1,364 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": []
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "code",
+      "execution_count": 4,
+      "metadata": {
+        "id": "acZd0RDPCFLd"
+      },
+      "outputs": [],
+      "source": [
+        "import polars as pl\n",
+        "strikes = pl.read_csv( \"https://raw.githubusercontent.com/philhetzel/opan5510-class10/refs/heads/main/data/faa_strikes.txt\", separator=\"\\t\")\n",
+        "strikes = strikes.with_columns(pl.col(\"Collision Date and Time\").str.strptime(pl.Datetime))"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#Question 1\n",
+        "\n",
+        "running_total_strikes = (strikes\n",
+        "    .with_columns(pl.col(\"Collision Date and Time\").dt.date().alias(\"date\"))\n",
+        "    .group_by(\"date\")\n",
+        "    .agg(pl.col(\"Number of Strikes\").sum().alias(\"daily_strikes\"))\n",
+        "    .sort(\"date\")\n",
+        "    .with_columns(\n",
+        "        pl.col(\"daily_strikes\")\n",
+        "        .cum_sum()\n",
+        "        .alias(\"strikes_cumulative\")  # running total\n",
+        "    )\n",
+        "    .filter(pl.col(\"date\") <= pl.date(2013, 12, 31))\n",
+        ")\n",
+        "\n",
+        "running_total_strikes"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 443
+        },
+        "id": "FheXhBcdDyua",
+        "outputId": "6514339f-cfaa-44b3-ab16-91ac2c404fa1"
+      },
+      "execution_count": 7,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "shape: (4_776, 3)\n",
+              "┌────────────┬───────────────┬────────────────────┐\n",
+              "│ date       ┆ daily_strikes ┆ strikes_cumulative │\n",
+              "│ ---        ┆ ---           ┆ ---                │\n",
+              "│ date       ┆ i64           ┆ i64                │\n",
+              "╞════════════╪═══════════════╪════════════════════╡\n",
+              "│ 2000-01-02 ┆ 1             ┆ 1                  │\n",
+              "│ 2000-01-03 ┆ 2             ┆ 3                  │\n",
+              "│ 2000-01-05 ┆ 3             ┆ 6                  │\n",
+              "│ 2000-01-06 ┆ 1             ┆ 7                  │\n",
+              "│ 2000-01-08 ┆ 4             ┆ 11                 │\n",
+              "│ …          ┆ …             ┆ …                  │\n",
+              "│ 2013-12-27 ┆ 6             ┆ 24096              │\n",
+              "│ 2013-12-28 ┆ 1             ┆ 24097              │\n",
+              "│ 2013-12-29 ┆ 2             ┆ 24099              │\n",
+              "│ 2013-12-30 ┆ 4             ┆ 24103              │\n",
+              "│ 2013-12-31 ┆ 6             ┆ 24109              │\n",
+              "└────────────┴───────────────┴────────────────────┘"
+            ],
+            "text/html": [
+              "<div><style>\n",
+              ".dataframe > thead > tr,\n",
+              ".dataframe > tbody > tr {\n",
+              "  text-align: right;\n",
+              "  white-space: pre-wrap;\n",
+              "}\n",
+              "</style>\n",
+              "<small>shape: (4_776, 3)</small><table border=\"1\" class=\"dataframe\"><thead><tr><th>date</th><th>daily_strikes</th><th>strikes_cumulative</th></tr><tr><td>date</td><td>i64</td><td>i64</td></tr></thead><tbody><tr><td>2000-01-02</td><td>1</td><td>1</td></tr><tr><td>2000-01-03</td><td>2</td><td>3</td></tr><tr><td>2000-01-05</td><td>3</td><td>6</td></tr><tr><td>2000-01-06</td><td>1</td><td>7</td></tr><tr><td>2000-01-08</td><td>4</td><td>11</td></tr><tr><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td></tr><tr><td>2013-12-27</td><td>6</td><td>24096</td></tr><tr><td>2013-12-28</td><td>1</td><td>24097</td></tr><tr><td>2013-12-29</td><td>2</td><td>24099</td></tr><tr><td>2013-12-30</td><td>4</td><td>24103</td></tr><tr><td>2013-12-31</td><td>6</td><td>24109</td></tr></tbody></table></div>"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 7
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#Question 2\n",
+        "\n",
+        "damage_state = (\n",
+        "    strikes\n",
+        "    .group_by(\"Origin State\")\n",
+        "    .agg(pl.col(\"Cost: Total $\").sum().alias(\"damage\"))\n",
+        "    .with_columns(\n",
+        "        pl.col(\"damage\")\n",
+        "        .rank(\"dense\", descending=True)\n",
+        "        .alias(\"ranking\")\n",
+        "    )\n",
+        "    .filter(pl.col(\"ranking\") == 3)\n",
+        ")\n",
+        "\n",
+        "damage_state"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 129
+        },
+        "id": "SnyOo40JFEPY",
+        "outputId": "c329e260-90bf-4667-ec5d-1de34301cca1"
+      },
+      "execution_count": 8,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "shape: (1, 3)\n",
+              "┌──────────────┬──────────┬─────────┐\n",
+              "│ Origin State ┆ damage   ┆ ranking │\n",
+              "│ ---          ┆ ---      ┆ ---     │\n",
+              "│ str          ┆ i64      ┆ u32     │\n",
+              "╞══════════════╪══════════╪═════════╡\n",
+              "│ California   ┆ 29671432 ┆ 3       │\n",
+              "└──────────────┴──────────┴─────────┘"
+            ],
+            "text/html": [
+              "<div><style>\n",
+              ".dataframe > thead > tr,\n",
+              ".dataframe > tbody > tr {\n",
+              "  text-align: right;\n",
+              "  white-space: pre-wrap;\n",
+              "}\n",
+              "</style>\n",
+              "<small>shape: (1, 3)</small><table border=\"1\" class=\"dataframe\"><thead><tr><th>Origin State</th><th>damage</th><th>ranking</th></tr><tr><td>str</td><td>i64</td><td>u32</td></tr></thead><tbody><tr><td>&quot;California&quot;</td><td>29671432</td><td>3</td></tr></tbody></table></div>"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 8
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#Question 3\n",
+        "\n",
+        "type_species = (strikes.group_by([\"Aircraft: Type\", \"Wildlife: Species Group\"])\n",
+        "    .agg(pl.col(\"Cost: Total $\").sum().alias(\"damage\"))\n",
+        "    .with_columns(\n",
+        "        pl.col(\"damage\")\n",
+        "        .rank(\"dense\", descending=True)\n",
+        "        .over(\"Aircraft: Type\")\n",
+        "        .alias(\"ranking\")\n",
+        "    )\n",
+        "    .filter(pl.col(\"ranking\") == 2)\n",
+        ")\n",
+        "\n",
+        "type_species"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 192
+        },
+        "id": "oU3TQx_SF7of",
+        "outputId": "da6dd8bd-d7ed-4f45-82fe-dce16942c2ed"
+      },
+      "execution_count": 9,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "shape: (3, 4)\n",
+              "┌────────────────┬─────────────────────────┬──────────┬─────────┐\n",
+              "│ Aircraft: Type ┆ Wildlife: Species Group ┆ damage   ┆ ranking │\n",
+              "│ ---            ┆ ---                     ┆ ---      ┆ ---     │\n",
+              "│ str            ┆ str                     ┆ i64      ┆ u32     │\n",
+              "╞════════════════╪═════════════════════════╪══════════╪═════════╡\n",
+              "│ NA             ┆ Vultures                ┆ 56227    ┆ 2       │\n",
+              "│ Airplane       ┆ Kites, Hawks, Eagles    ┆ 48989287 ┆ 2       │\n",
+              "│ Helicopter     ┆ Vultures                ┆ 116748   ┆ 2       │\n",
+              "└────────────────┴─────────────────────────┴──────────┴─────────┘"
+            ],
+            "text/html": [
+              "<div><style>\n",
+              ".dataframe > thead > tr,\n",
+              ".dataframe > tbody > tr {\n",
+              "  text-align: right;\n",
+              "  white-space: pre-wrap;\n",
+              "}\n",
+              "</style>\n",
+              "<small>shape: (3, 4)</small><table border=\"1\" class=\"dataframe\"><thead><tr><th>Aircraft: Type</th><th>Wildlife: Species Group</th><th>damage</th><th>ranking</th></tr><tr><td>str</td><td>str</td><td>i64</td><td>u32</td></tr></thead><tbody><tr><td>&quot;NA&quot;</td><td>&quot;Vultures&quot;</td><td>56227</td><td>2</td></tr><tr><td>&quot;Airplane&quot;</td><td>&quot;Kites, Hawks, Eagles&quot;</td><td>48989287</td><td>2</td></tr><tr><td>&quot;Helicopter&quot;</td><td>&quot;Vultures&quot;</td><td>116748</td><td>2</td></tr></tbody></table></div>"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 9
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#Question 4\n",
+        "\n",
+        "greatest_strike_increase = (strikes.with_columns(pl.col(\"Collision Date and Time\").dt.date().alias(\"date\"))\n",
+        "    .group_by(\"date\")\n",
+        "    .agg(pl.col(\"Number of Strikes\").sum().alias(\"daily_strikes\"))\n",
+        "    .sort(\"date\")\n",
+        "    .with_columns(\n",
+        "        pl.col(\"daily_strikes\")\n",
+        "        .shift(1)  # previous day's strikes\n",
+        "        .alias(\"previous_day\")\n",
+        "    )\n",
+        "    .with_columns(\n",
+        "        (pl.col(\"daily_strikes\") - pl.col(\"previous_day\")).alias(\"delta_strikes\")\n",
+        "    )\n",
+        "    .sort(\"delta_strikes\", descending=True)\n",
+        ")\n",
+        "\n",
+        "greatest_strike_increase"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 443
+        },
+        "id": "AJAfGyTwGP3C",
+        "outputId": "388b5bc0-f3b8-4886-d8ff-931916a9db79"
+      },
+      "execution_count": 10,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "shape: (5_285, 4)\n",
+              "┌────────────┬───────────────┬──────────────┬───────────────┐\n",
+              "│ date       ┆ daily_strikes ┆ previous_day ┆ delta_strikes │\n",
+              "│ ---        ┆ ---           ┆ ---          ┆ ---           │\n",
+              "│ date       ┆ i64           ┆ i64          ┆ i64           │\n",
+              "╞════════════╪═══════════════╪══════════════╪═══════════════╡\n",
+              "│ 2000-01-02 ┆ 1             ┆ null         ┆ null          │\n",
+              "│ 2010-10-29 ┆ 25            ┆ 7            ┆ 18            │\n",
+              "│ 2014-08-25 ┆ 25            ┆ 8            ┆ 17            │\n",
+              "│ 2012-06-28 ┆ 21            ┆ 5            ┆ 16            │\n",
+              "│ 2009-07-07 ┆ 21            ┆ 7            ┆ 14            │\n",
+              "│ …          ┆ …             ┆ …            ┆ …             │\n",
+              "│ 2012-06-29 ┆ 6             ┆ 21           ┆ -15           │\n",
+              "│ 2012-10-14 ┆ 5             ┆ 20           ┆ -15           │\n",
+              "│ 2014-08-26 ┆ 10            ┆ 25           ┆ -15           │\n",
+              "│ 2014-10-29 ┆ 5             ┆ 24           ┆ -19           │\n",
+              "│ 2013-08-20 ┆ 8             ┆ 28           ┆ -20           │\n",
+              "└────────────┴───────────────┴──────────────┴───────────────┘"
+            ],
+            "text/html": [
+              "<div><style>\n",
+              ".dataframe > thead > tr,\n",
+              ".dataframe > tbody > tr {\n",
+              "  text-align: right;\n",
+              "  white-space: pre-wrap;\n",
+              "}\n",
+              "</style>\n",
+              "<small>shape: (5_285, 4)</small><table border=\"1\" class=\"dataframe\"><thead><tr><th>date</th><th>daily_strikes</th><th>previous_day</th><th>delta_strikes</th></tr><tr><td>date</td><td>i64</td><td>i64</td><td>i64</td></tr></thead><tbody><tr><td>2000-01-02</td><td>1</td><td>null</td><td>null</td></tr><tr><td>2010-10-29</td><td>25</td><td>7</td><td>18</td></tr><tr><td>2014-08-25</td><td>25</td><td>8</td><td>17</td></tr><tr><td>2012-06-28</td><td>21</td><td>5</td><td>16</td></tr><tr><td>2009-07-07</td><td>21</td><td>7</td><td>14</td></tr><tr><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td><td>&hellip;</td></tr><tr><td>2012-06-29</td><td>6</td><td>21</td><td>-15</td></tr><tr><td>2012-10-14</td><td>5</td><td>20</td><td>-15</td></tr><tr><td>2014-08-26</td><td>10</td><td>25</td><td>-15</td></tr><tr><td>2014-10-29</td><td>5</td><td>24</td><td>-19</td></tr><tr><td>2013-08-20</td><td>8</td><td>28</td><td>-20</td></tr></tbody></table></div>"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 10
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#question 5\n",
+        "\n",
+        "greatest_strike_increase_type = (\n",
+        "    strikes\n",
+        "    .with_columns(pl.col(\"Collision Date and Time\").dt.date().alias(\"date\"))\n",
+        "    .group_by([\"Aircraft: Type\", \"date\"])\n",
+        "    .agg(pl.col(\"Number of Strikes\").sum().alias(\"daily_strikes\"))\n",
+        "    .sort([\"Aircraft: Type\", \"date\"])\n",
+        "    .with_columns(\n",
+        "        pl.col(\"daily_strikes\")\n",
+        "        .shift(1)\n",
+        "        .over(\"Aircraft: Type\")\n",
+        "        .alias(\"previous_day\")\n",
+        "    )\n",
+        "    .with_columns((pl.col(\"daily_strikes\") - pl.col(\"previous_day\")).alias(\"delta_strikes\"))\n",
+        "\n",
+        "    .filter(pl.col(\"delta_strikes\") > 0)\n",
+        "\n",
+        "    .sort([\"Aircraft: Type\", \"delta_strikes\", \"date\"], descending=[False, True, False])\n",
+        "\n",
+        "    .with_columns(\n",
+        "        pl.col(\"delta_strikes\")\n",
+        "        .rank(method=\"ordinal\", descending=True)\n",
+        "        .over(\"Aircraft: Type\")\n",
+        "        .alias(\"ranking\")\n",
+        "    )\n",
+        "    .filter(pl.col(\"ranking\") == 1)\n",
+        "    .select([\"Aircraft: Type\", \"date\", \"daily_strikes\", \"previous_day\", \"delta_strikes\", \"ranking\"])\n",
+        ")\n",
+        "\n",
+        "greatest_strike_increase_type"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 192
+        },
+        "id": "f30ph9yMGWfA",
+        "outputId": "82deef54-72b4-477a-e2f6-e702610f4056"
+      },
+      "execution_count": 14,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "shape: (3, 6)\n",
+              "┌────────────────┬────────────┬───────────────┬──────────────┬───────────────┬─────────┐\n",
+              "│ Aircraft: Type ┆ date       ┆ daily_strikes ┆ previous_day ┆ delta_strikes ┆ ranking │\n",
+              "│ ---            ┆ ---        ┆ ---           ┆ ---          ┆ ---           ┆ ---     │\n",
+              "│ str            ┆ date       ┆ i64           ┆ i64          ┆ i64           ┆ u32     │\n",
+              "╞════════════════╪════════════╪═══════════════╪══════════════╪═══════════════╪═════════╡\n",
+              "│ Airplane       ┆ 2014-08-25 ┆ 25            ┆ 8            ┆ 17            ┆ 1       │\n",
+              "│ Helicopter     ┆ 2010-07-21 ┆ 2             ┆ 1            ┆ 1             ┆ 1       │\n",
+              "│ NA             ┆ 2014-08-04 ┆ 5             ┆ 1            ┆ 4             ┆ 1       │\n",
+              "└────────────────┴────────────┴───────────────┴──────────────┴───────────────┴─────────┘"
+            ],
+            "text/html": [
+              "<div><style>\n",
+              ".dataframe > thead > tr,\n",
+              ".dataframe > tbody > tr {\n",
+              "  text-align: right;\n",
+              "  white-space: pre-wrap;\n",
+              "}\n",
+              "</style>\n",
+              "<small>shape: (3, 6)</small><table border=\"1\" class=\"dataframe\"><thead><tr><th>Aircraft: Type</th><th>date</th><th>daily_strikes</th><th>previous_day</th><th>delta_strikes</th><th>ranking</th></tr><tr><td>str</td><td>date</td><td>i64</td><td>i64</td><td>i64</td><td>u32</td></tr></thead><tbody><tr><td>&quot;Airplane&quot;</td><td>2014-08-25</td><td>25</td><td>8</td><td>17</td><td>1</td></tr><tr><td>&quot;Helicopter&quot;</td><td>2010-07-21</td><td>2</td><td>1</td><td>1</td><td>1</td></tr><tr><td>&quot;NA&quot;</td><td>2014-08-04</td><td>5</td><td>1</td><td>4</td><td>1</td></tr></tbody></table></div>"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 14
+        }
+      ]
+    }
+  ]
+}
